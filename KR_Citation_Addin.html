@@ -1016,7 +1016,7 @@ async function formatDocument() {
   const statusEl = document.getElementById('format-status');
   const btn = document.getElementById('format-btn');
 
-  if (typeof Word === 'undefined' || !Word.run) {
+  if (typeof Office === 'undefined' || !Office.context || !Office.context.document) {
     toast('Format only works inside Word — open via the manifest', 'error');
     statusEl.textContent = '⚠ Not running inside Word.';
     return;
@@ -1030,14 +1030,6 @@ async function formatDocument() {
   statusEl.textContent = 'Reading document…';
 
   try {
-    // Get the document as base64 OOXML
-    await Word.run(async (context) => {
-      const body = context.document.body;
-      const docOoxml = context.document.getContentControls();
-      context.load(body, 'text');
-      await context.sync();
-    });
-
     // Get docx bytes via getFileAsync
     Office.context.document.getFileAsync(
       Office.FileType.Compressed,
@@ -1051,67 +1043,73 @@ async function formatDocument() {
           return;
         }
 
-        const file = result.value;
-        const sliceCount = file.sliceCount;
-        const slices = [];
+        try {
+          const file = result.value;
+          const sliceCount = file.sliceCount;
+          const slices = [];
 
-        const getSlice = (i) => new Promise((resolve, reject) => {
-          file.getSliceAsync(i, (r) => {
-            if (r.status === Office.AsyncResultStatus.Succeeded) resolve(r.value.data);
-            else reject(new Error(r.error.message));
+          const getSlice = (i) => new Promise((resolve, reject) => {
+            file.getSliceAsync(i, (r) => {
+              if (r.status === Office.AsyncResultStatus.Succeeded) resolve(r.value.data);
+              else reject(new Error(r.error.message));
+            });
           });
-        });
 
-        statusEl.textContent = 'Reading slices…';
-        for (let i = 0; i < sliceCount; i++) {
-          slices.push(await getSlice(i));
-        }
-        file.closeAsync();
-
-        // Concatenate all slices into a Uint8Array
-        const totalLen = slices.reduce((n, s) => n + s.length, 0);
-        const docBytes = new Uint8Array(totalLen);
-        let offset = 0;
-        for (const s of slices) {
-          docBytes.set(new Uint8Array(s), offset);
-          offset += s.length;
-        }
-
-        statusEl.textContent = 'Formatting citations…';
-
-        // POST to /format
-        const resp = await fetch(
-          `${API}/format?style=${encodeURIComponent(style)}&numbered=${numbered}`,
-          { method: 'POST', body: docBytes, headers: { 'Content-Type': 'application/octet-stream' } }
-        );
-
-        if (!resp.ok) {
-          let msg = `HTTP ${resp.status}`;
-          try { msg = (await resp.json()).error; } catch(_) {}
-          throw new Error(msg);
-        }
-
-        const outBytes = new Uint8Array(await resp.arrayBuffer());
-
-        // Write back to the document
-        statusEl.textContent = 'Writing back…';
-        const base64 = uint8ToBase64(outBytes);
-
-        Office.context.document.setFileAsync(
-          base64,
-          { fileType: Office.FileType.Compressed },
-          (r) => {
-            btn.disabled = false;
-            btn.textContent = '⚙ Format Document';
-            if (r.status === Office.AsyncResultStatus.Succeeded) {
-              statusEl.textContent = '✅ Done! Placeholders replaced.';
-              toast('Document formatted successfully', 'success');
-            } else {
-              statusEl.textContent = '⚠ ' + r.error.message;
-              toast('Write-back failed: ' + r.error.message, 'error');
-            }
+          statusEl.textContent = 'Reading document…';
+          for (let i = 0; i < sliceCount; i++) {
+            slices.push(await getSlice(i));
           }
-        );
+          file.closeAsync();
+
+          // Concatenate slices
+          const totalLen = slices.reduce((n, s) => n + s.length, 0);
+          const docBytes = new Uint8Array(totalLen);
+          let offset = 0;
+          for (const s of slices) {
+            docBytes.set(new Uint8Array(s), offset);
+            offset += s.length;
+          }
+
+          statusEl.textContent = 'Formatting citations…';
+
+          // POST to /format
+          const resp = await fetch(
+            `${API}/format?style=${encodeURIComponent(style)}&numbered=${numbered}`,
+            { method: 'POST', body: docBytes, headers: { 'Content-Type': 'application/octet-stream' } }
+          );
+
+          if (!resp.ok) {
+            let msg = `HTTP ${resp.status}`;
+            try { msg = (await resp.json()).error; } catch(_) {}
+            throw new Error(msg);
+          }
+
+          const outBytes = await resp.arrayBuffer();
+
+          // Download the formatted file instead of writing back into Word
+          // (setFileAsync is unreliable and slow — download is instant)
+          statusEl.textContent = 'Downloading formatted document…';
+          const blob = new Blob([outBytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'formatted_document.docx';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          btn.disabled = false;
+          btn.textContent = '⚙ Format Document';
+          statusEl.textContent = '✅ Done! Check your Downloads folder.';
+          toast('Formatted document downloaded!', 'success');
+
+        } catch(e) {
+          btn.disabled = false;
+          btn.textContent = '⚙ Format Document';
+          statusEl.textContent = '⚠ ' + e.message;
+          toast('Error: ' + e.message, 'error');
+        }
       }
     );
   } catch(e) {
