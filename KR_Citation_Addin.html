@@ -1030,6 +1030,44 @@ async function formatDocument() {
   statusEl.textContent = 'Reading document…';
 
   try {
+    // ── Pre-flight: scan document for unresolved placeholders ──
+    statusEl.textContent = 'Checking placeholders…';
+    let unresolved = [];
+    try {
+      await Word.run(async (context) => {
+        const body = context.document.body;
+        context.load(body, 'text');
+        await context.sync();
+        const text = body.text;
+        const matches = [...text.matchAll(/\{KR:(\d+)\}/g)];
+        const docIds = [...new Set(matches.map(m => parseInt(m[1])))];
+        unresolved = docIds.filter(id => !state.projectRefIds.has(id));
+      });
+    } catch(_) {
+      // If Word.run fails, skip the check and proceed
+    }
+
+    if (unresolved.length > 0) {
+      const proceed = confirm(
+        `⚠ Warning: ${unresolved.length} placeholder(s) not in your project:
+
+` +
+        unresolved.map(id => `  {KR:${id}}`).join('
+') +
+        `
+
+These will remain as {KR:N} in the output.
+
+Proceed anyway?`
+      );
+      if (!proceed) {
+        btn.disabled = false;
+        btn.textContent = '⚙ Format Document';
+        statusEl.textContent = 'Cancelled — add missing references to project first.';
+        return;
+      }
+    }
+
     // Get docx bytes via getFileAsync
     Office.context.document.getFileAsync(
       Office.FileType.Compressed,
@@ -1179,41 +1217,3 @@ function updateModeHint() {
     hint.textContent = 'A numbered reference list is appended at the end.';
   } else {
     label.innerHTML = 'Author-date — <span style="color:var(--text3)">{KR:N} → (Smith et al., 2026)</span>';
-    hint.textContent = 'Full reference list still appended at the end.';
-  }
-}
-
-function copyPSCommand() {
-  const style = document.getElementById('format-style-select').value;
-  const numbered = document.getElementById('numbered-toggle').checked;
-  const inputPath = document.getElementById('docx-path').value.trim() ||
-    'C:\\Users\\rajas\\Desktop\\Reference Manager\\input.docx';
-  const outputPath = inputPath.replace(/\\([^\\]+)$/, '\\output_$1');
-
-  const cmd = `$bytes = [System.IO.File]::ReadAllBytes("${inputPath}")
-$resp = Invoke-WebRequest -Uri "http://localhost:5123/format?style=${encodeURIComponent(style)}&numbered=${numbered}" -Method POST -Body $bytes -ContentType "application/octet-stream" -UseBasicParsing
-[System.IO.File]::WriteAllBytes("${outputPath}", $resp.Content)
-Write-Host "Done! Saved to: ${outputPath}"`;
-
-  navigator.clipboard.writeText(cmd).then(() => {
-    const el = document.getElementById('ps-copied');
-    el.textContent = '✓ Copied! Paste into PowerShell and run.';
-    setTimeout(() => { el.textContent = ''; }, 4000);
-  }).catch(() => {
-    // Fallback: show in a prompt
-    prompt('Copy this PowerShell command:', cmd);
-  });
-}
-
-// ═══════════════════════════════════════════════════════════
-//  Boot
-// ═══════════════════════════════════════════════════════════
-boot();
-</script>
-
-<!-- Load Office.js when running inside Word (safe to load otherwise — it no-ops) -->
-<script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js" 
-        onerror="console.log('Office.js not available — standalone browser mode')">
-</script>
-</body>
-</html>
