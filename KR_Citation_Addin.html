@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KR Citation Manager</title>
+<style>
+  /* ── Design: clean academic utility tool, dense but readable ── */
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #f7f8fa;
+    --surface:   #ffffff;
+    --border:    #dde1e7;
+    --border2:   #c1c7cd;
+    --text:      #161616;
+    --text2:     #525252;
+    --text3:     #8d8d8d;
+    --accent:    #0f62fe;
+    --accent-h:  #0043ce;
+    --green:     #198038;
+    --green-bg:  #defbe6;
+    --amber:     #b45309;
+    --amber-bg:  #fef3c7;
+    --red:       #da1e28;
+    --red-bg:    #fff1f1;
+    --tag-bg:    #e8f4fd;
+    --tag-text:  #0f62fe;
+    --radius:    4px;
+    --font:      'IBM Plex Sans', system-ui, sans-serif;
+    --mono:      'IBM Plex Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ── Layout ── */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 12px 8px;
+    flex-shrink: 0;
+  }
+  #header h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
+  #header .sub {
+    font-size: 10px;
+    opacity: 0.75;
+    margin-top: 1px;
+    font-family: var(--mono);
+  }
+  #api-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    margin-top: 4px;
+    opacity: 0.9;
+  }
+  #api-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #42be65;
+    flex-shrink: 0;
+  }
+  #api-dot.offline { background: #ff8389; }
+
+  /* ── Project bar ── */
+  #project-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  #project-bar label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+  #project-select {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+  #project-select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  /* ── Tab bar ── */
+  #tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab {
+    flex: 1;
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--accent); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  /* ── Panels ── */
+  .panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .panel.active { display: flex; }
+
+  /* ── Search panel ── */
+  #search-bar {
+    padding: 8px 10px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  #search-input {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 12px;
+    background: var(--bg);
+  }
+  #search-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+
+  #search-scope {
+    padding: 6px 6px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 11px;
+    background: var(--bg);
+    cursor: pointer;
+  }
+
+  .results-scroll {
+    overflow-y: auto;
+    flex: 1;
+    padding: 6px 8px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 2px 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-label .count {
+    background: var(--border);
+    color: var(--text2);
+    border-radius: 8px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* ── Result card ── */
+  .ref-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 9px;
+    margin-bottom: 5px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .ref-card:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .ref-card.in-project { border-left: 3px solid var(--green); }
+
+  .ref-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.35;
+    margin-bottom: 3px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ref-meta {
+    font-size: 10px;
+    color: var(--text3);
+    line-height: 1.4;
+    margin-bottom: 5px;
+    font-family: var(--mono);
+  }
+  .ref-meta .authors { color: var(--text2); font-family: var(--font); font-size: 11px; }
+
+  .ref-badges {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .badge.pubmed  { background: #e8f4fd; color: #0f62fe; }
+  .badge.library { background: var(--green-bg); color: var(--green); }
+  .badge.project { background: #d9fbdb; color: #0a6620; }
+  .badge.type    { background: #f4f4f4; color: var(--text2); }
+
+  .ref-actions {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.12s, opacity 0.12s;
+    white-space: nowrap;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-h); border-color: var(--accent-h); }
+  .btn-success  { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn-success:hover:not(:disabled) { background: #0e6b2e; }
+  .btn-outline  { background: transparent; color: var(--accent); border-color: var(--accent); }
+  .btn-outline:hover:not(:disabled) { background: #e8f0fe; }
+  .btn-ghost    { background: transparent; color: var(--text2); border-color: var(--border2); }
+  .btn-ghost:hover:not(:disabled) { background: var(--bg); border-color: var(--border2); }
+  .btn-danger   { background: var(--red); color: #fff; border-color: var(--red); }
+  .btn-sm { font-size: 10px; padding: 3px 7px; }
+
+  /* ── Project panel ── */
+  #project-refs-list {
+    overflow-y: auto;
+    flex: 1;
+    padding: 6px 8px;
+  }
+  .proj-ref-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 7px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 5px;
+  }
+  .proj-ref-row:hover { border-color: var(--border2); }
+  .proj-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    min-width: 20px;
+    padding-top: 1px;
+    flex-shrink: 0;
+  }
+  .proj-info { flex: 1; min-width: 0; }
+  .proj-title {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+    margin-bottom: 2px;
+  }
+  .proj-meta {
+    font-size: 10px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+  .proj-actions { display: flex; gap: 4px; flex-shrink: 0; padding-top: 1px; }
+
+  /* ── Format panel ── */
+  #format-panel {
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+  }
+  .form-row { display: flex; flex-direction: column; gap: 4px; }
+  .form-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+  }
+  .form-select {
+    padding: 6px 8px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .form-select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .toggle-row input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; }
+
+  .format-hint {
+    font-size: 11px;
+    color: var(--text2);
+    background: var(--amber-bg);
+    border: 1px solid #fcd34d;
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    line-height: 1.5;
+  }
+  .format-hint strong { color: var(--amber); }
+
+  /* ── New project modal ── */
+  #modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #modal-overlay.show { display: flex; }
+  #modal {
+    background: var(--surface);
+    border-radius: 6px;
+    padding: 18px 16px 14px;
+    width: 240px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  #modal h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  #modal input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    font-family: var(--font);
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  #modal input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #modal .modal-btns { display: flex; gap: 6px; justify-content: flex-end; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(40px);
+    background: #161616;
+    color: #fff;
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 200;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { background: var(--red); }
+  #toast.success { background: var(--green); }
+
+  /* ── Loading spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 24px 12px;
+    color: var(--text3);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .empty-state .icon { font-size: 24px; margin-bottom: 6px; }
+
+  /* ── KR tag ── */
+  .kr-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: #f0f0f0;
+    color: var(--text2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <h1>KR Citation Manager</h1>
+    <div class="sub">Word Add-in · Phase 7</div>
+    <div id="api-status">
+      <div id="api-dot" class="offline"></div>
+      <span id="api-status-text">Connecting…</span>
+    </div>
+  </div>
+
+  <!-- Project bar -->
+  <div id="project-bar">
+    <label>Project:</label>
+    <select id="project-select">
+      <option value="">— select project —</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="showNewProjectModal()">+ New</button>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tabs">
+    <div class="tab active" data-tab="search">🔍 Search</div>
+    <div class="tab"        data-tab="project">📁 Project</div>
+    <div class="tab"        data-tab="format">⚙ Format</div>
+  </div>
+
+  <!-- ══ SEARCH PANEL ══ -->
+  <div class="panel active" id="panel-search">
+    <div id="search-bar">
+      <input id="search-input" type="text" placeholder="Search library or PubMed…" autocomplete="off"/>
+      <select id="search-scope" title="Search scope">
+        <option value="both">Both</option>
+        <option value="library">Library</option>
+        <option value="pubmed">PubMed</option>
+      </select>
+    </div>
+    <div class="results-scroll" id="results-container">
+      <div class="empty-state">
+        <div class="icon">📚</div>
+        Select a project, then search for references to add.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PROJECT PANEL ══ -->
+  <div class="panel" id="panel-project">
+    <div style="padding:8px 10px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+      <span id="project-ref-count" style="font-size:11px; color:var(--text2);">No project selected</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadProjectRefs()">↺ Refresh</button>
+    </div>
+    <div id="project-refs-list">
+      <div class="empty-state">
+        <div class="icon">📁</div>
+        Select a project to see its references.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ FORMAT PANEL ══ -->
+  <div class="panel" id="panel-format">
+    <div id="format-panel">
+      <div class="form-row">
+        <label class="form-label">Citation Style</label>
+        <select class="form-select" id="format-style-select">
+          <option value="Vancouver">Vancouver</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label class="form-label">Citation Mode</label>
+        <div class="toggle-row">
+          <input type="checkbox" id="numbered-toggle" checked onchange="updateModeHint()"/>
+          <label for="numbered-toggle" style="font-size:12px;" id="mode-label">
+            Numbered — <span style="color:var(--text3)">{KR:N} → [1], [2]…</span>
+          </label>
+        </div>
+        <div id="mode-hint" style="font-size:11px; color:var(--text3); margin-top:3px; margin-left:22px; line-height:1.5;">
+          A numbered reference list is appended at the end.
+        </div>
+      </div>
+
+      <div class="format-hint">
+        <strong>Workflow:</strong> Place cursor in Word where you want a citation, click <strong>↵ Insert</strong> in the Project tab — this copies <span class="kr-tag">{KR:N}</span> to clipboard, then Ctrl+V in Word. When ready, use <strong>Format Document</strong> below.
+      </div>
+
+      <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:10px; font-size:11px;">
+        <div style="font-weight:600; color:var(--text2); margin-bottom:6px;">📋 Format via PowerShell</div>
+        <div style="color:var(--text2); margin-bottom:8px; line-height:1.5;">
+          1. Save your Word doc as <code style="font-family:var(--mono); background:#f0f0f0; padding:1px 4px; border-radius:2px;">input.docx</code> in your Reference Manager folder<br>
+          2. Click the button below to copy the command<br>
+          3. Paste and run in PowerShell
+        </div>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <input id="docx-path" class="form-select" style="flex:1; font-family:var(--mono); font-size:10px;"
+                 value="C:\Users\rajas\Desktop\Reference Manager\input.docx"
+                 placeholder="Path to your .docx file"/>
+        </div>
+        <button class="btn btn-primary" onclick="copyPSCommand()" style="width:100%; justify-content:center;">
+          📋 Copy PowerShell Command
+        </button>
+        <div id="ps-copied" style="font-size:10px; color:var(--green); margin-top:6px; min-height:14px;"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:2px;">
+        <div style="font-size:11px; font-weight:600; color:var(--text2); margin-bottom:6px;">⚡ Format in Word (when running as add-in)</div>
+        <button class="btn btn-outline" id="format-btn" onclick="formatDocument()" style="width:100%; justify-content:center;">
+          ⚙ Format Document (Word Add-in only)
+        </button>
+        <div id="format-status" style="font-size:11px; color:var(--text2); min-height:16px; margin-top:4px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<!-- New Project Modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3>New Project</h3>
+    <input id="new-project-name" type="text" placeholder="Project name…" maxlength="80"
+           onkeydown="if(event.key==='Enter') createProject()"/>
+    <div class="modal-btns">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="createProject()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  Config
+// ═══════════════════════════════════════════════════════════
+const API = 'http://localhost:5123';
+
+// ═══════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════
+let state = {
+  apiOnline:      false,
+  currentProject: null,   // {id, name}
+  projectRefs:    [],      // [{id, title, authors, year, ...}]
+  projectRefIds:  new Set(), // quick lookup
+  searchDebounce: null,
+  styles:         [],
+};
+
+// ═══════════════════════════════════════════════════════════
+//  Boot
+// ═══════════════════════════════════════════════════════════
+async function boot() {
+  await checkAPI();
+  if (state.apiOnline) {
+    await loadFolders();
+    await loadStyles();
+  }
+  bindEvents();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  API helpers
+// ═══════════════════════════════════════════════════════════
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { msg = (await res.json()).error || msg; } catch(_) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function checkAPI() {
+  try {
+    const d = await apiFetch('/status');
+    state.apiOnline = d.running === true;
+  } catch(_) {
+    state.apiOnline = false;
+  }
+  const dot  = document.getElementById('api-dot');
+  const text = document.getElementById('api-status-text');
+  if (state.apiOnline) {
+    dot.classList.remove('offline');
+    text.textContent = 'API connected · localhost:5123';
+  } else {
+    dot.classList.add('offline');
+    text.textContent = 'API offline — launch the app first';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Folders / Projects
+// ═══════════════════════════════════════════════════════════
+async function loadFolders() {
+  try {
+    const folders = await apiFetch('/folders');
+    const sel = document.getElementById('project-select');
+    const prevId = state.currentProject?.id;
+    sel.innerHTML = '<option value="">— select project —</option>';
+    for (const f of folders) {
+      const opt = document.createElement('option');
+      opt.value = f.id;
+      opt.textContent = f.name;
+      if (f.id === prevId) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  } catch(e) {
+    toast('Could not load folders: ' + e.message, 'error');
+  }
+}
+
+function showNewProjectModal() {
+  document.getElementById('new-project-name').value = '';
+  document.getElementById('modal-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('new-project-name').focus(), 80);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+async function createProject() {
+  const name = document.getElementById('new-project-name').value.trim();
+  if (!name) return;
+  try {
+    const folder = await apiFetch('/folders', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+    closeModal();
+    await loadFolders();
+    // Auto-select the new project
+    document.getElementById('project-select').value = folder.id;
+    await onProjectChange(folder.id, folder.name);
+    toast(`Project "${name}" created`, 'success');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function onProjectChange(id, name) {
+  if (!id) {
+    state.currentProject = null;
+    state.projectRefs = [];
+    state.projectRefIds = new Set();
+    document.getElementById('project-ref-count').textContent = 'No project selected';
+    return;
+  }
+  state.currentProject = { id: parseInt(id), name };
+  await loadProjectRefs();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Project references
+// ═══════════════════════════════════════════════════════════
+async function loadProjectRefs() {
+  if (!state.currentProject) return;
+  try {
+    state.projectRefs = await apiFetch(
+      `/search?q=&limit=500&folder_id=${state.currentProject.id}`
+    );
+    state.projectRefIds = new Set(state.projectRefs.map(r => r.id));
+    renderProjectRefs();
+  } catch(e) {
+    toast('Could not load project refs: ' + e.message, 'error');
+  }
+}
+
+function renderProjectRefs() {
+  const list = document.getElementById('project-refs-list');
+  const countEl = document.getElementById('project-ref-count');
+  const refs = state.projectRefs;
+
+  countEl.textContent = state.currentProject
+    ? `${refs.length} reference${refs.length !== 1 ? 's' : ''} in "${state.currentProject.name}"`
+    : 'No project selected';
+
+  if (!refs.length) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">📭</div>No references in this project yet.<br>Search and add references above.</div>`;
+    return;
+  }
+
+  list.innerHTML = refs.map((ref, i) => `
+    <div class="proj-ref-row" id="proj-row-${ref.id}">
+      <div class="proj-num">${i + 1}</div>
+      <div class="proj-info">
+        <div class="proj-title">${escHtml(ref.title || 'Untitled')}</div>
+        <div class="proj-meta">${escHtml(firstAuthorShort(ref.authors))} · ${escHtml(ref.year || '')} · <span class="kr-tag">{KR:${ref.id}}</span></div>
+      </div>
+      <div class="proj-actions">
+        <button class="btn btn-success btn-sm" onclick="insertRef(${ref.id})" title="Insert placeholder at cursor">
+          ↵ Insert
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Search
+// ═══════════════════════════════════════════════════════════
+function bindEvents() {
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      if (tab.dataset.tab === 'project') loadProjectRefs();
+    });
+  });
+
+  // Project select
+  document.getElementById('project-select').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    onProjectChange(this.value, opt.textContent);
+  });
+
+  // Search input debounce
+  document.getElementById('search-input').addEventListener('input', function() {
+    clearTimeout(state.searchDebounce);
+    const q = this.value.trim();
+    if (!q) {
+      document.getElementById('results-container').innerHTML =
+        `<div class="empty-state"><div class="icon">📚</div>Type to search your library or PubMed.</div>`;
+      return;
+    }
+    state.searchDebounce = setTimeout(() => runSearch(q), 400);
+  });
+
+  document.getElementById('search-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      clearTimeout(state.searchDebounce);
+      runSearch(this.value.trim());
+    }
+  });
+
+  // Close modal on overlay click
+  document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+}
+
+async function runSearch(q) {
+  if (!q) return;
+  const scope = document.getElementById('search-scope').value;
+  const container = document.getElementById('results-container');
+  container.innerHTML = `<div class="empty-state"><span class="spinner"></span> Searching…</div>`;
+
+  let libResults = [], pubResults = [];
+  const errors = [];
+
+  try {
+    if (scope === 'library' || scope === 'both') {
+      libResults = await apiFetch(`/search?q=${encodeURIComponent(q)}&limit=20`);
+    }
+  } catch(e) { errors.push('Library: ' + e.message); }
+
+  try {
+    if (scope === 'pubmed' || scope === 'both') {
+      pubResults = await apiFetch(`/search/pubmed?q=${encodeURIComponent(q)}&limit=10`);
+    }
+  } catch(e) { errors.push('PubMed: ' + e.message); }
+
+  if (errors.length) toast(errors.join(' | '), 'error');
+
+  // Deduplicate: remove PubMed results whose PMID is already in library results
+  const libPmids = new Set(libResults.map(r => r.pmid).filter(Boolean));
+  pubResults = pubResults.filter(r => !r.pmid || !libPmids.has(r.pmid));
+
+  renderSearchResults(libResults, pubResults);
+}
+
+function renderSearchResults(libResults, pubResults) {
+  const container = document.getElementById('results-container');
+  let html = '';
+
+  if (!libResults.length && !pubResults.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div>No results found.</div>`;
+    return;
+  }
+
+  if (libResults.length) {
+    html += `<div class="section-label">Library <span class="count">${libResults.length}</span></div>`;
+    html += libResults.map(ref => refCard(ref, 'library')).join('');
+  }
+
+  if (pubResults.length) {
+    html += `<div class="section-label">PubMed <span class="count">${pubResults.length}</span></div>`;
+    html += pubResults.map(ref => refCard(ref, 'pubmed')).join('');
+  }
+
+  container.innerHTML = html;
+}
+
+function refCard(ref, source) {
+  const inProject = state.projectRefIds.has(ref.id) ||
+                    (ref.in_library && state.projectRefIds.has(ref.library_id));
+  const refId = ref.id || ref.library_id;
+
+  const badges = [];
+  if (source === 'pubmed') badges.push(`<span class="badge pubmed">PubMed</span>`);
+  if (ref.in_library || source === 'library') badges.push(`<span class="badge library">In Library</span>`);
+  if (inProject) badges.push(`<span class="badge project">In Project</span>`);
+  if (ref.ref_type || ref.academic_type) {
+    const t = (ref.academic_type || ref.ref_type || '').replace('JOURNAL_ARTICLE','Article');
+    if (t) badges.push(`<span class="badge type">${escHtml(t)}</span>`);
+  }
+
+  // Action button
+  let actionBtn = '';
+  if (!state.currentProject) {
+    actionBtn = `<button class="btn btn-ghost btn-sm" disabled title="Select a project first">Select project first</button>`;
+  } else if (inProject) {
+    actionBtn = `<button class="btn btn-success btn-sm" onclick="insertRef(${refId})" title="Insert {KR:${refId}} at cursor">↵ Insert</button>`;
+  } else {
+    // Need to add to project
+    const dataAttr = source === 'pubmed'
+      ? `data-pubmed='${escAttr(JSON.stringify(ref))}'`
+      : `data-lib-id="${ref.id}"`;
+    actionBtn = `<button class="btn btn-primary btn-sm" ${dataAttr} onclick="addToProject(this)" title="Add to project &amp; library">+ Add to Project</button>`;
+  }
+
+  return `
+    <div class="ref-card ${inProject ? 'in-project' : ''}" id="card-${source}-${ref.pmid || ref.id}">
+      <div class="ref-title">${escHtml(ref.title || 'Untitled')}</div>
+      <div class="ref-meta">
+        <span class="authors">${escHtml(firstAuthorShort(ref.authors))}</span>
+        · ${escHtml(ref.journal || '')} · ${escHtml(ref.year || '')}
+        ${ref.doi ? `· <a href="https://doi.org/${ref.doi}" target="_blank" style="color:var(--accent); text-decoration:none; font-size:10px;">DOI ↗</a>` : ''}
+      </div>
+      ${badges.length ? `<div class="ref-badges">${badges.join('')}</div>` : ''}
+      <div class="ref-actions">${actionBtn}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Add to project
+// ═══════════════════════════════════════════════════════════
+async function addToProject(btn) {
+  if (!state.currentProject) {
+    toast('Select a project first', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  try {
+    let pubmedData;
+
+    if (btn.dataset.libId) {
+      // Already in library — fetch full record to re-post as pubmed_data
+      // The API will find it by PMID and just assign to folder (no duplicate)
+      const ref = await apiFetch(`/reference/${btn.dataset.libId}`);
+      pubmedData = {
+        pmid:               ref.pmid || '',
+        title:              ref.title || '',
+        authors_structured: ref.authors_structured || [],
+        journal:            ref.journal || ref.container_title || '',
+        year:               ref.year || '',
+        volume:             ref.volume || '',
+        issue:              ref.issue || '',
+        pages:              ref.pages || '',
+        doi:                ref.doi || '',
+        abstract:           ref.abstract || '',
+        publication_types:  ref.publication_types || '',
+        academic_type:      ref.academic_type || '',
+        species:            ref.species || '',
+      };
+    } else {
+      // PubMed result — add to library + assign in one call
+      pubmedData = JSON.parse(btn.dataset.pubmed || '{}');
+    }
+
+    const result = await apiFetch('/library/add', {
+      method: 'POST',
+      body: JSON.stringify({
+        folder_id: state.currentProject.id,
+        pubmed_data: pubmedData,
+      }),
+    });
+
+    const refId = result.id;
+
+    // Update local state
+    state.projectRefIds.add(refId);
+    await loadProjectRefs();
+
+    // Update the card UI in place
+    btn.closest('.ref-card').classList.add('in-project');
+    btn.className = 'btn btn-success btn-sm';
+    btn.removeAttribute('data-pubmed');
+    btn.removeAttribute('data-lib-id');
+    btn.setAttribute('onclick', `insertRef(${refId})`);
+    btn.textContent = '↵ Insert';
+    btn.disabled = false;
+
+    toast('Added to project', 'success');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '+ Add to Project';
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Insert placeholder at Word cursor
+// ═══════════════════════════════════════════════════════════
+async function insertRef(refId) {
+  const placeholder = `{KR:${refId}}`;
+
+  // Try Office.js API first (real Word Add-in context)
+  if (typeof Word !== 'undefined' && Word.run) {
+    try {
+      await Word.run(async (context) => {
+        const sel = context.document.getSelection();
+        sel.insertText(placeholder, Word.InsertLocation.replace);
+        await context.sync();
+      });
+      toast(`Inserted ${placeholder}`, 'success');
+      return;
+    } catch(e) {
+      toast('Insert failed: ' + e.message, 'error');
+      return;
+    }
+  }
+
+  // Fallback: copy to clipboard (for standalone browser testing)
+  try {
+    await navigator.clipboard.writeText(placeholder);
+    toast(`Copied ${placeholder} to clipboard — paste into Word`, 'success');
+  } catch(_) {
+    toast(`Paste manually: ${placeholder}`, 'success');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Format Document
+// ═══════════════════════════════════════════════════════════
+async function formatDocument() {
+  const statusEl = document.getElementById('format-status');
+  const btn = document.getElementById('format-btn');
+
+  if (typeof Word === 'undefined' || !Word.run) {
+    toast('Format only works inside Word — open via the manifest', 'error');
+    statusEl.textContent = '⚠ Not running inside Word.';
+    return;
+  }
+
+  const style = document.getElementById('format-style-select').value;
+  const numbered = document.getElementById('numbered-toggle').checked;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Formatting…';
+  statusEl.textContent = 'Reading document…';
+
+  try {
+    // Get the document as base64 OOXML
+    await Word.run(async (context) => {
+      const body = context.document.body;
+      const docOoxml = context.document.getContentControls();
+      context.load(body, 'text');
+      await context.sync();
+    });
+
+    // Get docx bytes via getFileAsync
+    Office.context.document.getFileAsync(
+      Office.FileType.Compressed,
+      { sliceSize: 65536 },
+      async (result) => {
+        if (result.status !== Office.AsyncResultStatus.Succeeded) {
+          toast('Could not read document: ' + result.error.message, 'error');
+          btn.disabled = false;
+          btn.textContent = '⚙ Format Document';
+          statusEl.textContent = '';
+          return;
+        }
+
+        const file = result.value;
+        const sliceCount = file.sliceCount;
+        const slices = [];
+
+        const getSlice = (i) => new Promise((resolve, reject) => {
+          file.getSliceAsync(i, (r) => {
+            if (r.status === Office.AsyncResultStatus.Succeeded) resolve(r.value.data);
+            else reject(new Error(r.error.message));
+          });
+        });
+
+        statusEl.textContent = 'Reading slices…';
+        for (let i = 0; i < sliceCount; i++) {
+          slices.push(await getSlice(i));
+        }
+        file.closeAsync();
+
+        // Concatenate all slices into a Uint8Array
+        const totalLen = slices.reduce((n, s) => n + s.length, 0);
+        const docBytes = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const s of slices) {
+          docBytes.set(new Uint8Array(s), offset);
+          offset += s.length;
+        }
+
+        statusEl.textContent = 'Formatting citations…';
+
+        // POST to /format
+        const resp = await fetch(
+          `${API}/format?style=${encodeURIComponent(style)}&numbered=${numbered}`,
+          { method: 'POST', body: docBytes, headers: { 'Content-Type': 'application/octet-stream' } }
+        );
+
+        if (!resp.ok) {
+          let msg = `HTTP ${resp.status}`;
+          try { msg = (await resp.json()).error; } catch(_) {}
+          throw new Error(msg);
+        }
+
+        const outBytes = new Uint8Array(await resp.arrayBuffer());
+
+        // Write back to the document
+        statusEl.textContent = 'Writing back…';
+        const base64 = uint8ToBase64(outBytes);
+
+        Office.context.document.setFileAsync(
+          base64,
+          { fileType: Office.FileType.Compressed },
+          (r) => {
+            btn.disabled = false;
+            btn.textContent = '⚙ Format Document';
+            if (r.status === Office.AsyncResultStatus.Succeeded) {
+              statusEl.textContent = '✅ Done! Placeholders replaced.';
+              toast('Document formatted successfully', 'success');
+            } else {
+              statusEl.textContent = '⚠ ' + r.error.message;
+              toast('Write-back failed: ' + r.error.message, 'error');
+            }
+          }
+        );
+      }
+    );
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '⚙ Format Document';
+    statusEl.textContent = '⚠ ' + e.message;
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Styles
+// ═══════════════════════════════════════════════════════════
+async function loadStyles() {
+  try {
+    state.styles = await apiFetch('/styles');
+    const sel = document.getElementById('format-style-select');
+    sel.innerHTML = state.styles.map(s =>
+      `<option value="${escAttr(s.name)}" ${s.name === 'Vancouver' ? 'selected' : ''}>${escHtml(s.name)}</option>`
+    ).join('');
+  } catch(e) {
+    console.warn('Could not load styles:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Utilities
+// ═══════════════════════════════════════════════════════════
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(s) {
+  return String(s || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+}
+function firstAuthorShort(authors) {
+  if (!authors) return '';
+  const first = authors.split(',')[0].trim();
+  const parts = first.split(' ');
+  if (parts.length >= 2) return parts[0] + ' et al.';
+  return first;
+}
+function uint8ToBase64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ' + type : '');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PowerShell command helper
+// ═══════════════════════════════════════════════════════════
+function updateModeHint() {
+  const checked = document.getElementById('numbered-toggle').checked;
+  const label = document.getElementById('mode-label');
+  const hint = document.getElementById('mode-hint');
+  if (checked) {
+    label.innerHTML = 'Numbered — <span style="color:var(--text3)">{KR:N} → [1], [2]…</span>';
+    hint.textContent = 'A numbered reference list is appended at the end.';
+  } else {
+    label.innerHTML = 'Author-date — <span style="color:var(--text3)">{KR:N} → (Smith et al., 2026)</span>';
+    hint.textContent = 'Full reference list still appended at the end.';
+  }
+}
+
+function copyPSCommand() {
+  const style = document.getElementById('format-style-select').value;
+  const numbered = document.getElementById('numbered-toggle').checked;
+  const inputPath = document.getElementById('docx-path').value.trim() ||
+    'C:\\Users\\rajas\\Desktop\\Reference Manager\\input.docx';
+  const outputPath = inputPath.replace(/\\([^\\]+)$/, '\\output_$1');
+
+  const cmd = `$bytes = [System.IO.File]::ReadAllBytes("${inputPath}")
+$resp = Invoke-WebRequest -Uri "http://localhost:5123/format?style=${encodeURIComponent(style)}&numbered=${numbered}" -Method POST -Body $bytes -ContentType "application/octet-stream" -UseBasicParsing
+[System.IO.File]::WriteAllBytes("${outputPath}", $resp.Content)
+Write-Host "Done! Saved to: ${outputPath}"`;
+
+  navigator.clipboard.writeText(cmd).then(() => {
+    const el = document.getElementById('ps-copied');
+    el.textContent = '✓ Copied! Paste into PowerShell and run.';
+    setTimeout(() => { el.textContent = ''; }, 4000);
+  }).catch(() => {
+    // Fallback: show in a prompt
+    prompt('Copy this PowerShell command:', cmd);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Boot
+// ═══════════════════════════════════════════════════════════
+boot();
+</script>
+
+<!-- Load Office.js when running inside Word (safe to load otherwise — it no-ops) -->
+<script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js" 
+        onerror="console.log('Office.js not available — standalone browser mode')">
+</script>
+</body>
+</html>
